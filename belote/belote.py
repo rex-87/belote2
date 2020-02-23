@@ -177,8 +177,8 @@ try:
 			for c_index, c in enumerate(self.hand_l):
 				rest_of_hand = copy.copy(self.hand_l)
 				rest_of_hand.pop(c_index)
-				b_card_playable = regles.b_is_card_playable(c, rest_of_hand, table_l, atout)
-				print(c, b_card_playable)
+				b_card_playable, card_playable_explanation = regles.b_is_card_playable(c, rest_of_hand, table_l, atout)
+				print(c, b_card_playable, "({})".format(card_playable_explanation))
 				if b_card_playable:
 					card_index_l.append(c_index)
 			
@@ -187,29 +187,48 @@ try:
 
 	class Regles(object):
 	
+		def get_couleur_demandee(self, table_l):
+		
+			return table_l[0].suit
+	
+		def b_coupe(self, table_l, atout):
+		
+			b_coupe = False
+			for c in table_l[1:]:
+				if c.suit == atout:
+					b_coupe = True
+					break
+			return b_coupe
+		
+		def get_highest_atout_rank(self, table_l, atout):
+			
+			highest_atout_rank = 0
+			for c in table_l:
+				if (c.suit == atout) and (c.get_rank(atout) >= highest_atout_rank):
+					highest_atout_rank = c.get_rank(atout)
+					break
+			else:
+				highest_atout_rank = None
+			return highest_atout_rank
+		
 		def b_is_card_playable(self, player_card, rest_of_hand, table_l, atout):
 
 			# is the table not empty?
 			if table_l != []:
 				
-				# la couleur demandée. TODO create dedicated function
-				couleur_demandee = table_l[0].suit
+				# la couleur demandée
+				couleur_demandee = self.get_couleur_demandee(table_l)
 				
 				# atout demandé ? . TODO create dedicated function
 				b_atout_demande = False
 				if couleur_demandee == atout:
 					b_atout_demande = True
 				
-				# coupé?. TODO create dedicated function
-				b_coupe = False
-				for c in table_l[1:]:
-					if c.suit == atout:
-						b_coupe = True
-						break
+				# coupé?
+				b_coupe = self.b_coupe(table_l, atout)
 						
 				# est-ce que le partenaire du joueur est maître?. TODO create dedicated function
 				b_partenaire_maitre = False
-				import IPython;IPython.embed(colors='Neutral')
 				if (
 					(len(table_l) == 2) and (self.get_winning_card_from_table(table_l, atout) == 0)
 				   or
@@ -217,14 +236,8 @@ try:
 				):
 					b_partenaire_maitre = True
 
-				# atout tombé le plus fort ?. TODO create dedicated function
-				highest_atout_rank = 0
-				for c in table_l:
-					if (c.suit == atout) and (c.get_rank(atout) >= highest_atout_rank):
-						highest_atout_rank = c.get_rank(atout)
-						break
-				else:
-					highest_atout_rank = None
+				# atout tombé le plus fort ?
+				highest_atout_rank = self.get_highest_atout_rank(table_l, atout)
 
 				# carte du joueur est de la couleur demandée 
 				if player_card.suit == couleur_demandee:
@@ -233,7 +246,7 @@ try:
 					
 						# carte plus haute que l'atout tombé le plus fort
 						if player_card.get_rank(atout) > highest_atout_rank:
-							return True
+							return (True, "Atout demandé, peut jouer plus haut avec cet atout")
 						# carte moins haute que l'atout tombé le plus fort
 						else:
 							# peut il monter à l'atout?
@@ -244,23 +257,23 @@ try:
 									break
 							# s'il peut monter alors il ne peut pas jouer un atout moins fort
 							if b_peut_monter:
-								return False
+								return (False, "Atout demandé, peut monter avec un autre atout")
 							# s'il ne peut pas monter alors il peut pisser avec cette carte
 							else:
-								return True
+								return (True, "Atout demandé, peut pisser avec cet atout")
 								
 					# on peut toujours jouer la couleur demandée si ce n'est pas l'atout qui est demandé
 					else:
-						return True
+						return (True, "Peut jouer la couleur demandée")
 				# carte du joueur n'est pas de la couleur demandée 	
 				else:
 					# s'il a la couleur demandée en main, il ne peut pas jouer d'une autre couleur
 					if self.b_can_play_suit(rest_of_hand, couleur_demandee):
-						return False
+						return (False, "Peut jouer la couleur demandée, donc pas cette carte")
 					else:
 						# si le partenaire du joueur est maître, il peut soit se défausser, soit jouer de l'atout
 						if b_partenaire_maitre:
-							return True
+							return (True, "Peut pas jouer la couleur demandée, partenaire est maitre")
 						else:
 							# s'il n'a pas la couleur demandée et que son partenaire n'est pas maître, il doit jouer atout
 							if player_card.suit == atout:
@@ -269,7 +282,7 @@ try:
 
 									# carte plus haute que l'atout tombé le plus fort
 									if player_card.get_rank(atout) > highest_atout_rank:
-										return True
+										return (True, "Peut pas jouer la couleur demandée, jeu est coupé, peut jouer plus haut avec cet atout")
 									# carte moins haute que l'atout tombé le plus fort
 									else:
 										# peut il monter à l'atout?
@@ -280,25 +293,25 @@ try:
 												break
 										# s'il peut monter alors il ne peut pas jouer un atout moins fort
 										if b_peut_monter:
-											return False
+											return (False, "Peut pas jouer la couleur demandée, peut monter avec un autre atout")
 										# s'il ne peut pas monter alors il peut pisser avec cette carte
 										else:
-											return True
+											return (True, "Peut pas jouer la couleur demandée, peut pisser avec cet atout")
 								
 								else:
-									return True
+									return (True, "Peut pas jouer la couleur demandée, peut couper avec cet atout")
 									
 							else:		
 								# s'il a de l'atout, il ne peut pas jouer d'une autre couleur
 								if self.b_can_play_suit(rest_of_hand, atout):
-									return False
+									return (False, "Peut pas jouer la couleur demandée, peut jouer un atout")
 								# s'il n'a pas la couleur demandée en main ni d'atout alors il peut se defausser de n'importe quelle carte
 								else:
-									return True
+									return (True, "Peut pas jouer la couleur demandée, pas d'atout")
 
 			# empty table => any card is good
 			else:
-				return True	
+				return (True, "Table is empty")
 		
 		def get_winning_card_from_table(self, table_l, atout):
 		
@@ -306,12 +319,20 @@ try:
 			TODO determine the winning card properly 
 			"""
 	
+			couleur_demandee = self.get_couleur_demandee(table_l)
+			b_coupe = self.b_coupe(table_l, atout)
+	
+			if b_coupe or (couleur_demandee == atout):
+				winning_suit = atout
+			else:
+				winning_suit = couleur_demandee
+	
 			winning_c_index = 0
 			for c_index, c in enumerate(table_l):
-				if c.get_points(atout) > table_l[winning_c_index].get_points(atout):
+				if (c.suit == winning_suit) and (c.get_points(atout) >= table_l[winning_c_index].get_points(atout)):
 					winning_c_index = c_index
-					
-			return c_index
+			
+			return winning_c_index
 
 		def b_can_play_suit(self, rest_of_hand, suit):
 			""" le joueur a-t-il de la couleur suit en main? """
@@ -321,8 +342,7 @@ try:
 					b_can_play_suit = True
 					break
 			return b_can_play_suit
-		
-		
+	
 	class Belote(object):
 		
 				
