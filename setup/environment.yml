@@ -1,0 +1,39 @@
+name: belote_env
+channels:
+  - anaconda
+  - defaults
+dependencies:
+  - backcall=0.1.0=py38_0
+  - ca-certificates=2020.1.1=0
+  - certifi=2020.4.5.1=py38_0
+  - colorama=0.4.3=py_0
+  - decorator=4.4.2=py_0
+  - ipython=7.13.0=py38h5ca1d4c_0
+  - ipython_genutils=0.2.0=py38_0
+  - jedi=0.16.0=py38_1
+  - nomkl=2.0=0
+  - openssl=1.1.1=he774522_0
+  - parso=0.6.2=py_0
+  - pickleshare=0.7.5=py38_1000
+  - pip=20.0.2=py38_1
+  - prompt-toolkit=3.0.4=py_0
+  - prompt_toolkit=3.0.4=0
+  - pygments=2.6.1=py_0
+  - python=3.8.2=h5fd99cc_0
+  - setuptools=46.1.3=py38_0
+  - six=1.14.0=py38_0
+  - sqlite=3.31.1=he774522_0
+  - traitlets=4.3.3=py38_0
+  - vc=14.1=h0510ff6_4
+  - vs2015_runtime=14.16.27012=hf0eaf9b_1
+  - wcwidth=0.1.9=py_0
+  - wheel=0.34.2=py38_0
+  - wincertstore=0.2=py38_0
+  - pip:
+    - numpy==1.18.2
+    - pandas==1.0.3
+    - pygame==1.9.6
+    - python-dateutil==2.8.1
+    - pytz==2019.3
+prefix: C:\Users\rex87\miniconda3_64\envs\belote_env
+

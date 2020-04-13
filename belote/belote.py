@@ -32,6 +32,11 @@ try:
 	import random
 	import copy
 	import time
+	import pygame
+	import numpy as np
+	import queue
+	import threading
+	import os
 
 	class CsvObjectGenerator(object):
 		
@@ -360,9 +365,21 @@ try:
 				
 		def __init__(self):
 		
+			self.deck_l	   = None
+			self.joueurs_l = None
+			
+			self.test_thread = None
+			self.b_test_thread_abort_queue = queue.Queue()
+			
+			self.t = 0
+		
+		def initialise(self):
+			
 			self.deck_l	   = Deck(CsvObjectGenerator(Carte).generate_from_csv(csv_path = r'C:\Users\rex87\belote2\belote\cartes.csv' ))
 			self.joueurs_l = CsvObjectGenerator(Joueur).generate_from_csv(csv_path = r'C:\Users\rex87\belote2\belote\joueurs.csv')
 			
+			self.test_thread = threading.Thread(target = self.run_test_thread)		
+		
 		def play(self):
 			
 			# shuffle the deck
@@ -431,15 +448,130 @@ try:
 			
 			return (team1_points, team2_points)
 	
-	# Belote().play()
+		def run_test_thread(self):
+			
+			ClockFrequency = 60
+			TimeElapsed = 0
+			startTime = 0
+			while True:
+				
+				try:
+					b_test_thread_abort = self.b_test_thread_abort_queue.get(block = False)
+					if b_test_thread_abort:
+						break
+				except queue.Empty:
+					pass		 
+				
+				TimeElapsed = time.perf_counter() - startTime
+				if TimeElapsed > ( 1/ClockFrequency ):
+					startTime = time.perf_counter()
+					self.t += 1
+					self.x1 = (1/2)*(np.sin(self.t/ClockFrequency) + 1)
+					self.x2 = (1/2)*(np.cos(0.7*self.t/ClockFrequency) + 1)
+				else:
+					time.sleep(1/ClockFrequency - TimeElapsed) 		
 	
-	# results_l = []
-	for game_i in range(100):
-		start_time = time.time()
-		result_l = Belote().play()
-		LOG.info(time.time() - start_time)
-		# results_l.append(result_l[0] - result_l[1])
+		def start_all_threads(self):
+			self.test_thread.start()
+		
+		def abortAllThreads(self):
+			self.b_test_thread_abort_queue.put(True)
+		
+		def joinAllThreads(self):
+			self.test_thread.join()
+		
+		def stopAllThreads(self):
+			self.abortAllThreads()
+			self.joinAllThreads()
+	
+	this_folder = os.path.dirname(os.path.realpath(__file__))
+	
+	screen_width = 800
+	screen_height = 600
 
+	BLACK_COLOUR = (0, 0, 0)
+	GREEN_COLOUR = (0, 127, 0)
+	WHITE_COLOUR = (255, 255, 255)
+
+	pygame.init()
+	screen = pygame.display.set_mode((screen_width, screen_height))
+
+	background = pygame.Surface(screen.get_size())
+	background = background.convert()
+
+	FPS = 30
+
+	belote_obj = Belote()
+	belote_obj.initialise()
+	belote_obj.start_all_threads()
+
+	card_images_d = {}
+	name_map = {
+		'pique'   : 'Pique',
+		'coeur'   : 'Coeur',
+		'carreau' : 'Carreau',
+		'trefle'  : 'Trefle',
+		'7'       : '7',
+		'8'       : '8',
+		'9'       : '9',
+		'10'      : '10',
+		'valet'   : 'V',
+		'dame'    : 'D',
+		'roi'     : 'R',
+		'as'      : 'A',
+	}
+	for suit in ['pique', 'coeur', 'carreau', 'trefle']:
+		card_images_d[name_map[suit]] = {}
+		for rank in ['7', '8', '9', '10', 'valet', 'dame', 'roi', 'as']:
+			card_images_d[name_map[suit]][name_map[rank]] = pygame.image.load(os.path.join(this_folder, r'..\images\cards\{}_{}.png'.format(suit, rank)))
+
+	def get_card_x(i):
+		return int(i*(screen_width-168)/7)
+
+	b_playing = True
+	last_time = 0
+	card_y_idle = screen_height - 200
+	card_y_sel_offset = -50
+	while b_playing:
+
+		for event in pygame.event.get():
+			if event.type == pygame.QUIT:
+				b_playing = False # pygame window closed by user
+				belote_obj.stopAllThreads()
+			if event.type == pygame.MOUSEMOTION:
+				mouse_pos = pygame.mouse.get_pos()
+		
+		# the nice green background
+		background.fill(GREEN_COLOUR)
+
+		# update card selection
+		b_hand_card_selected_l = [False]*8
+		if mouse_pos[1] > card_y_idle + card_y_sel_offset: 
+			for hand_i in range(8):
+				
+				if mouse_pos[0] < get_card_x(hand_i+1):
+					b_hand_card_selected_l[hand_i] = True
+					break
+					
+			if mouse_pos[0] >= get_card_x(7+1):
+				b_hand_card_selected_l[7] = True
+		
+		# update card sprites
+		for hand_i in range(8):
+			card_x = get_card_x(hand_i)
+			card_y = card_y_idle + card_y_sel_offset*b_hand_card_selected_l[hand_i]
+			background.blit(card_images_d['Pique']['7'], (card_x, card_y))
+		
+		# refresh rate
+		now = time.time()
+		if (now - last_time) > (1/FPS):
+			screen.blit(background, (0, 0))
+			pygame.display.flip()
+			last_time = time.time()
+		else:
+			milliseconds_left = int(1000*((1/FPS) - (now - last_time)))
+			pygame.time.wait(milliseconds_left)
+	 
 ## -------- SOMETHING WENT WRONG -----------------------------	
 except:
 
