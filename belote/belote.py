@@ -31,6 +31,7 @@ try:
 	import pandas as pd
 	import random
 	import copy
+	import time
 
 	class CsvObjectGenerator(object):
 		
@@ -143,10 +144,19 @@ try:
 				}[self.value]					
 
 	class Deck(list):
-	
+		
 		def __new__(cls, data = None):
 			obj = super(Deck, cls).__new__(cls, data)
-			return obj	
+			obj.b_dix_de_der = False
+			return obj
+
+		def get_points(self, atout):
+		
+			dix_de_der = 0
+			if self.b_dix_de_der:
+				dix_de_der = 10
+			
+			return sum([c.get_points(atout) for c in self]) + dix_de_der
 	
 		def __str__(self):
 		
@@ -178,12 +188,15 @@ try:
 				rest_of_hand = copy.copy(self.hand_l)
 				rest_of_hand.pop(c_index)
 				b_card_playable, card_playable_explanation = regles.b_is_card_playable(c, rest_of_hand, table_l, atout)
-				print(c, b_card_playable, "({})".format(card_playable_explanation))
+				LOG.debug("{} {} {}".format(c, b_card_playable, "({})".format(card_playable_explanation)))
 				if b_card_playable:
 					card_index_l.append(c_index)
 			
 			# current strategy: random
-			return self.hand_l.pop(random.choice(card_index_l))
+			played_card = self.hand_l.pop(random.choice(card_index_l))
+			LOG.debug("{:<5}: {}".format(str(self), played_card))
+			
+			return played_card
 
 	class Regles(object):
 	
@@ -316,7 +329,7 @@ try:
 		def get_winning_card_from_table(self, table_l, atout):
 		
 			"""
-			TODO determine the winning card properly 
+			determine the winning card on the table 
 			"""
 	
 			couleur_demandee = self.get_couleur_demandee(table_l)
@@ -343,13 +356,12 @@ try:
 					break
 			return b_can_play_suit
 	
-	class Belote(object):
-		
+	class Belote(object):	
 				
 		def __init__(self):
 		
-			self.deck_l	   = Deck(CsvObjectGenerator(Carte ).generate_from_csv(csv_path = r'C:\Users\rex87\belote\belote\cartes.csv' ))
-			self.joueurs_l = CsvObjectGenerator(Joueur).generate_from_csv(csv_path = r'C:\Users\rex87\belote\belote\joueurs.csv')
+			self.deck_l	   = Deck(CsvObjectGenerator(Carte).generate_from_csv(csv_path = r'C:\Users\rex87\belote2\belote\cartes.csv' ))
+			self.joueurs_l = CsvObjectGenerator(Joueur).generate_from_csv(csv_path = r'C:\Users\rex87\belote2\belote\joueurs.csv')
 			
 		def play(self):
 			
@@ -367,34 +379,66 @@ try:
 			table_l   = Deck([])
 			team1_l   = Deck([])
 			team2_l   = Deck([])
-			for i in range(8):
+			points_sum = 0
+			winning_player = 0
+			for round_i in range(8):
 
 				for j in self.joueurs_l:
-					print("{:<5}: {}".format(str(j), j.hand_l))
+					LOG.debug("{:<5}: {}".format(str(j), j.hand_l))
 				
-				for j in self.joueurs_l:
-				
+				# table_l is indexed with table_i
+				for table_i in range(4):
+					
+					j_index = (table_i+winning_player)%4
+					j = self.joueurs_l[j_index]
+					
 					# player plays a card
 					played_card = j.play_a_card(table_l, atout, Regles())
-					print("{:<5}: {}".format(str(j), played_card))
 					table_l.append(played_card)
-					
+				
+				winning_c_index = Regles().get_winning_card_from_table(table_l, atout)
+				winning_player = (winning_player+winning_c_index)%4
+				
+				LOG.debug(
+					"Fin du tour: {}| Valeur de la main: {}| Joueur qui prend la main: {}".format(
+						table_l,
+						table_l.get_points(atout),
+						str(self.joueurs_l[winning_player]),
+					)
+				)
+				
 				# end of round: empty table and in winning team's pile
-				for i in range(4):
-					team1_l.append(table_l.pop())
+				if winning_player%2 == 0:
+					winning_team_l = team1_l
+				else:
+					winning_team_l = team2_l
+				
+				for table_i in range(4):
+					winning_team_l.append(table_l.pop())
 					
-				print()
+				if round_i == 7:
+					winning_team_l.b_dix_de_der = True
+					
+				LOG.debug("")
 			
-			print(self.deck_l)
-			print([j.hand_l for j in self.joueurs_l])
-			print(table_l)
-			print(team1_l)
-			print(team2_l)
+			assert((team1_l.get_points(atout) + team2_l.get_points(atout)) == 162)
+			
+			team1_points = team1_l.get_points(atout)
+			team2_points = team2_l.get_points(atout)
+			
+			LOG.debug("Equipe 0-2: {}".format(team1_points))
+			LOG.debug("Equipe 1-3: {}".format(team2_points))
+			
+			return (team1_points, team2_points)
 	
-	Belote().play()
+	# Belote().play()
 	
-	# while True:
-		# Belote().play()
+	# results_l = []
+	for game_i in range(100):
+		start_time = time.time()
+		result_l = Belote().play()
+		LOG.info(time.time() - start_time)
+		# results_l.append(result_l[0] - result_l[1])
 
 ## -------- SOMETHING WENT WRONG -----------------------------	
 except:
