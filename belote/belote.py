@@ -227,6 +227,7 @@ try:
 					self.human_choice = None				
 					self.b_thinking = False
 				
+				# if it excepts here, continue until selection is valid
 				try:
 					played_card = self.hand_l.pop(card_choice)
 				except IndexError:
@@ -381,10 +382,18 @@ try:
 			else:
 				winning_suit = couleur_demandee
 	
-			winning_c_index = 0
+			winning_c_index = None
 			for c_index, c in enumerate(table_l):
+				
+				if (c.suit == winning_suit) and winning_c_index is None:
+					winning_c_index = c_index
+					continue
+				
 				if (c.suit == winning_suit) and (c.get_points(atout) >= table_l[winning_c_index].get_points(atout)):
 					winning_c_index = c_index
+			
+			# ensure winning card has the winning suit
+			assert(table_l[winning_c_index].suit == winning_suit)
 			
 			return winning_c_index
 
@@ -405,22 +414,20 @@ try:
 			self.joueurs_l = None
 			self.table_l   = None
 			self.winning_player = None
+			self.b_left_click = False
+			self.atout = None
 			
 			self.play_thread = None
 			self.b_play_thread_abort_queue = queue.Queue()
 			
 			self.t = 0
-		
-		def initialise(self):
-			
+
+		def run_play_thread(self):
+
+			# initialise deck and joueurs
 			self.deck_l	   = Deck(CsvObjectGenerator(Carte).generate_from_csv(csv_path = r'C:\Users\rex87\belote2\belote\cartes.csv' ))
 			self.joueurs_l = CsvObjectGenerator(Joueur).generate_from_csv(csv_path = r'C:\Users\rex87\belote2\belote\joueurs.csv')
-			
-			# self.test_thread = threading.Thread(target = self.run_test_thread)		
-			self.play_thread = threading.Thread(name = "play_thread", target = self.run_play_thread)		
-		
-		def run_play_thread(self):
-			
+
 			# shuffle the deck
 			random.shuffle(self.deck_l)
 			
@@ -429,7 +436,7 @@ try:
 				for j in self.joueurs_l:
 					j.hand_l.append(self.deck_l.pop())
 			
-			atout = "Coeur"
+			self.atout = "Trefle"
 
 			# game
 			self.table_l = Deck([])
@@ -445,27 +452,49 @@ try:
 				# table_l is indexed with table_i
 				for table_i in range(4):
 					
+					try:
+						b_play_thread_abort = self.b_play_thread_abort_queue.get(block = False)
+						if b_play_thread_abort:
+							raise Exception("Aborted before joueur played a card")
+					except queue.Empty:
+						pass
+					
 					j_index = (table_i+self.winning_player)%4
 					j = self.joueurs_l[j_index]
 					
 					# player plays a card
-					played_card = j.play_a_card(self.table_l, atout, Regles(), self.b_play_thread_abort_queue)
+					played_card = j.play_a_card(self.table_l, self.atout, Regles(), self.b_play_thread_abort_queue)
 					self.table_l.append(played_card)
-					
+						
 					time.sleep(0.5)
 				
-				winning_c_index = Regles().get_winning_card_from_table(self.table_l, atout)
+				winning_c_index = Regles().get_winning_card_from_table(self.table_l, self.atout)
 				next_winning_player = (self.winning_player+winning_c_index)%4
 				
 				LOG.debug(
 					"Fin du tour: {}| Valeur de la main: {}| Joueur qui prend la main: {} ({})".format(
 						self.table_l,
-						self.table_l.get_points(atout),
+						self.table_l.get_points(self.atout),
 						str(self.joueurs_l[next_winning_player]),
 						next_winning_player,
 					)
 				)
-				input("PAUSE")
+				
+				LOG.debug("Waiting for user to click anywhere")
+				self.b_left_click = False
+				while True:
+					
+					try:
+						b_play_thread_abort = self.b_play_thread_abort_queue.get(block = False)
+						if b_play_thread_abort:
+							raise Exception("Aborted while waiting for user to click anywhere")
+					except queue.Empty:
+						pass
+						
+					if self.b_left_click:
+						break
+						
+					time.sleep(1/FPS)
 				
 				self.winning_player = next_winning_player
 				
@@ -483,15 +512,20 @@ try:
 					
 				LOG.debug("")
 			
-			assert((team1_l.get_points(atout) + team2_l.get_points(atout)) == 162)
+			assert((team1_l.get_points(self.atout) + team2_l.get_points(self.atout)) == 162)
 			
-			team1_points = team1_l.get_points(atout)
-			team2_points = team2_l.get_points(atout)
+			team1_points = team1_l.get_points(self.atout)
+			team2_points = team2_l.get_points(self.atout)
 			
 			LOG.debug("Equipe 0-2: {}".format(team1_points))
 			LOG.debug("Equipe 1-3: {}".format(team2_points))
 			
-			return (team1_points, team2_points)
+			# this thread is going to end. Schedule a delayed start for the next one
+			self.play_thread_count += 1
+			self.play_thread = threading.Timer(.01, self.run_play_thread)
+			self.play_thread.name = "play_thread_{}".format(self.play_thread_count)
+			self.play_thread.start()
+			# return (team1_points, team2_points)
 	
 		def run_test_thread(self):
 			
@@ -517,8 +551,14 @@ try:
 					time.sleep(1/ClockFrequency - TimeElapsed) 		
 	
 		def start_all_threads(self):
+			
+			# self.test_thread = threading.Thread(target = self.run_test_thread)			
 			# self.test_thread.start()
+			
+			self.play_thread = threading.Thread(name = "play_thread_1", target = self.run_play_thread)
 			self.play_thread.start()
+			self.play_thread_count = 1
+			
 			return
 		
 		def abortAllThreads(self):
@@ -556,19 +596,25 @@ try:
 
 	background = pygame.Surface(screen.get_size())
 	background = background.convert()
+	
+	statusbar_height = 30
+	statusbar = pygame.Surface((screen_width, statusbar_height))
+	statusbar = statusbar.convert()
+	statusbar.set_alpha(220)
 
 	FPS = 30
 
-	hj = 2 # human joueur id
 	b_obj = Belote()
-	b_obj.initialise()
 	b_obj.start_all_threads()
+	time.sleep(0.1)
+	
+	hj = 2 # human joueur id
 	b_obj.joueurs_l[hj].b_human = True
 
 	# table cards coordinates
 	tx = 320
 	ty = 120
-	to1, to2 = 70, 25
+	to1, to2 = 70, 10
 	table_coord_l = [
 		(tx - to2, ty + to1), # human player
 		(tx - to1, ty - to2),
@@ -596,6 +642,17 @@ try:
 		card_images_d[name_map[suit]] = {}
 		for rank in ['7', '8', '9', '10', 'valet', 'dame', 'roi', 'as']:
 			card_images_d[name_map[suit]][name_map[rank]] = pygame.image.load(os.path.join(this_folder, r'..\images\cards\{}_{}.png'.format(suit, rank)))
+	suit_images_d = {}
+	for fname in ['pique', 'coeur', 'carreau', 'trefle']:
+		suit_images_d[fname] = pygame.image.load(os.path.join(this_folder, r'..\images\cards\{}.png'.format(fname)))
+		suit_images_d[fname].convert_alpha()
+		suit_images_d[fname] = pygame.transform.smoothscale(suit_images_d[fname], (statusbar_height, statusbar_height))
+	
+	# surfaces for names of the joueurs
+	human_joueur_name = myfont.render(b_obj.joueurs_l[(hj+0)%4].name, True, (0, 0, 0))
+	joueur_left_name  = myfont.render(b_obj.joueurs_l[(hj+1)%4].name, True, (0, 0, 0))
+	joueur_top_name   = myfont.render(b_obj.joueurs_l[(hj+2)%4].name, True, (0, 0, 0))
+	joueur_right_name = myfont.render(b_obj.joueurs_l[(hj+3)%4].name, True, (0, 0, 0))
 
 	b_playing = True
 	last_time = 0
@@ -612,6 +669,7 @@ try:
 			elif event.type == pygame.MOUSEMOTION:
 				mouse_pos = pygame.mouse.get_pos()
 			elif event.type == pygame.MOUSEBUTTONDOWN:
+				b_obj.b_left_click = True
 				b_left_click = True
 				# LOG.info(mouse_pos)
 		
@@ -651,17 +709,19 @@ try:
 			
 			background.blit(card_images_d[hand_card.suit][hand_card.rank], (hand_x, hand_y))
 		
-		# display players' names
-		joueur_name  = myfont.render(b_obj.joueurs_l[(hj+0)%4].name, True, (0, 0, 0))
-		joueur_left  = myfont.render(b_obj.joueurs_l[(hj+1)%4].name, True, (0, 0, 0))
-		joueur_front = myfont.render(b_obj.joueurs_l[(hj+2)%4].name, True, (0, 0, 0))
-		joueur_right = myfont.render(b_obj.joueurs_l[(hj+3)%4].name, True, (0, 0, 0))
-		background.blit(joueur_name , (int(screen_width/2), screen_height-50      ))
-		background.blit(joueur_left , (0                  , int(4*screen_height/9)))
-		background.blit(joueur_front, (int(screen_width/2), 0                     ))
-		background.blit(joueur_right, (screen_width - 100 , int(5*screen_height/9)))
+		# display other players' names
+		background.blit(joueur_left_name , (0                  , int(4*screen_height/9)))
+		background.blit(joueur_top_name  , (int(screen_width/2), 0                     ))
+		background.blit(joueur_right_name, (screen_width - 100 , int(5*screen_height/9)))
 		
-		# refresh rate
+		# STATUS BAR
+		statusbar.fill(WHITE_COLOUR)
+		background.blit(statusbar, (0, screen_height - statusbar_height))
+		background.blit(human_joueur_name, (int((screen_width-human_joueur_name.get_width())/2), screen_height-statusbar_height))
+		atout_image = suit_images_d[b_obj.atout.lower()]
+		background.blit(atout_image, (screen_width-atout_image.get_width(), screen_height-atout_image.get_height()))
+		
+		# Screen refresh
 		now = time.time()
 		if (now - last_time) > (1/FPS):
 			screen.blit(background, (0, 0))
@@ -670,7 +730,7 @@ try:
 		else:
 			milliseconds_left = int(1000*((1/FPS) - (now - last_time)))
 			pygame.time.wait(milliseconds_left)
-	 
+			
 ## -------- SOMETHING WENT WRONG -----------------------------	
 except:
 
