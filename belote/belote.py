@@ -28,15 +28,150 @@ try:
 	## THE MAIN PROGRAM STARTS HERE
 	## -------------------------------------------------------	
 
-	import pandas as pd
-	import random
-	import copy
-	import time
-	import pygame
-	import numpy as np
-	import queue
-	import threading
-	import os
+	LOG.debug("import pandas ...");    import pandas as pd
+	LOG.debug("import random ...");    import random
+	LOG.debug("import copy ...");      import copy
+	LOG.debug("import time ...");      import time
+	LOG.debug("import pygame ...");    import pygame
+	LOG.debug("import numpy ...");     import numpy as np
+	LOG.debug("import queue ...");     import queue
+	LOG.debug("import threading ..."); import threading
+	LOG.debug("import os ...");        import os
+
+	class Button():
+
+		def __init__(self, text, x=0, y=0, width=100, height=50, command=None):
+
+			self.text = text
+			self.command = command
+			
+			self.image_normal = pygame.Surface((width, height))
+			self.image_normal.fill(GREEN_COLOUR)
+
+			self.image_hovered = pygame.Surface((width, height))
+			self.image_hovered.fill(RED_COLOUR)
+
+			self.image = self.image_normal
+			self.rect = self.image.get_rect()
+
+			font = pygame.font.Font('freesansbold.ttf', 15)
+			
+			text_image = font.render(text, True, WHITE_COLOUR)
+			text_rect = text_image.get_rect(center = self.rect.center)
+			
+			self.image_normal.blit(text_image, text_rect)
+			self.image_hovered.blit(text_image, text_rect)
+
+			# you can't use it before `blit` 
+			self.rect.topleft = (x, y)
+
+			self.hovered = False
+
+		def update(self):
+
+			if self.hovered:
+				self.image = self.image_hovered
+			else:
+				self.image = self.image_normal
+			
+		def draw(self, surface):
+
+			surface.blit(self.image, self.rect)
+
+		def handle_event(self, event):
+
+			if event.type == pygame.MOUSEMOTION:
+				self.hovered = self.rect.collidepoint(event.pos)
+			elif event.type == pygame.MOUSEBUTTONDOWN:
+				if self.hovered:
+					LOG.debug('Clicked: {}'.format(self.text))
+					return True
+					
+			return False
+
+	class YesNoBox():
+	
+		def __init__(self, question_text, x=0, y=0, width=100, height=50, command=None):
+			
+			self.question_text = question_text
+			self.command = command
+			
+			font = pygame.font.Font('freesansbold.ttf', 20)			
+
+			self.bg = pygame.Surface((width, height))
+			self.bg_rect = self.bg.get_rect()
+			
+			qtext_image = font.render(question_text, True, WHITE_COLOUR)
+			qtext_rect = qtext_image.get_rect(center = (self.bg_rect.center[0], int(self.bg_rect.center[1]/2)))
+			
+			self.bg.blit(qtext_image, qtext_rect)
+
+			self.oui_button = Button('OUI', 90 , 40, 100, 50)
+			self.non_button = Button('NON', 210, 40, 100, 50)		
+			
+			self.bg_rect.topleft = (x, y)
+			
+			self.answer = None
+			
+		def update(self):
+			
+			self.oui_button.update()
+			self.non_button.update()
+			
+		def draw(self, surface):
+	
+			self.oui_button.draw(self.bg)
+			self.non_button.draw(self.bg)
+	
+			surface.blit(self.bg, self.bg_rect)			
+
+		def handle_event(self, event):
+
+			event_ = event		
+			if event.type == pygame.MOUSEMOTION:
+				event_.pos = (event.pos[0] - self.bg_rect.topleft[0], event.pos[1] - self.bg_rect.topleft[1])
+				
+			if self.oui_button.handle_event(event_):
+				self.answer = True
+			if self.non_button.handle_event(event_):
+				self.answer = False
+
+	class MessageBox():
+	
+		def __init__(self, message_text, x=0, y=0, width=100, height=50):
+			
+			self.message_text = message_text
+			
+			font = pygame.font.Font('freesansbold.ttf', 18)			
+
+			self.bg = pygame.Surface((width, height))
+			self.bg.fill(WHITE_COLOUR)
+			self.bg_rect = self.bg.get_rect()
+			
+			qtext_image = font.render(message_text, True, BLUE_COLOUR)
+			qtext_rect = qtext_image.get_rect(center = self.bg_rect.center)
+			qtext_rect[0] = 1
+			
+			self.bg.blit(qtext_image, qtext_rect)
+			self.bg.set_colorkey(WHITE_COLOUR)
+			self.bg.convert_alpha()
+			
+			self.bg_rect.topleft = (x, y)
+			
+		def update(self):
+			
+			return
+			
+		def draw(self, surface):
+	
+			surface.blit(self.bg, self.bg_rect)			
+
+		def handle_event(self, event):
+
+			return
+
+	def StatusBox(message = ""):
+		return MessageBox(message, 0, screen_height - statusbar_height, 300, statusbar_height)
 
 	class CsvObjectGenerator(object):
 		
@@ -162,7 +297,28 @@ try:
 				dix_de_der = 10
 			
 			return sum([c.get_points(atout) for c in self]) + dix_de_der
-	
+
+		def b_has_suit(self, suit = None):
+			
+			for c in self:
+				if c.suit == suit:
+					return True
+			return False
+		
+		def b_has_rank(self, rank = None):
+			
+			for c in self:
+				if c.rank == rank:
+					return True
+			return False
+			
+		def b_has_card(self, rank = None, suit = None):
+			
+			for c in self:
+				if c.rank == rank and c.suit == suit:
+					return True
+			return False
+		
 		def __str__(self):
 		
 			return " ".join([str(carte) for carte in self])
@@ -176,6 +332,7 @@ try:
 			self.b_human = False
 			self.b_thinking = False
 			self.human_choice = None
+			self.allowed_card_index_l = []
 			
 		def __repr__(self):
 			
@@ -191,23 +348,24 @@ try:
 		def play_a_card(self, table_l, atout, regles, b_play_thread_abort_queue):
 			
 			# determine what cards can be played (according to the rules)
-			allowed_card_index_l = []
+			self.allowed_card_index_l = []
 			for c_index, c in enumerate(self.hand_l):
 				rest_of_hand = copy.copy(self.hand_l)
 				rest_of_hand.pop(c_index)
 				b_card_playable, card_playable_explanation = regles.b_is_card_playable(c, rest_of_hand, table_l, atout)
 				LOG.debug("{} {} {}".format(c, b_card_playable, "({})".format(card_playable_explanation)))
 				if b_card_playable:
-					allowed_card_index_l.append(c_index)
+					self.allowed_card_index_l.append(c_index)
 			
 			# loop to filter out wrong clicks on GUI
 			while True:
 			
 				if not self.b_human:
 					# current strategy: random
-					card_choice = random.choice(allowed_card_index_l)
+					card_choice = random.choice(self.allowed_card_index_l)
 				else:
 					self.b_thinking = True
+					self.human_choice = None
 					LOG.debug("Waiting for human player {}".format(self.name))
 					while True:
 
@@ -223,8 +381,8 @@ try:
 							
 						time.sleep(1/20)
 						
-					card_choice = self.human_choice
-					self.human_choice = None				
+					card_choice = self.human_choice			
+					self.human_choice = None
 					self.b_thinking = False
 				
 				# if it excepts here, continue until selection is valid
@@ -234,12 +392,14 @@ try:
 					LOG.debug("IndexError while popping card from player hand. Likely problem with card clicked.")
 					continue
 				
+				self.allowed_card_index_l = []
+				
 				break
 			
 			LOG.debug("{:<5}: {}".format(str(self), played_card))
 			
 			return played_card
-
+				
 	class Regles(object):
 	
 		def get_couleur_demandee(self, table_l):
@@ -284,10 +444,11 @@ try:
 						
 				# est-ce que le partenaire du joueur est maître?. TODO create dedicated function
 				b_partenaire_maitre = False
+				win_c_i = self.get_winning_card_from_table(table_l, atout)
 				if (
-					(len(table_l) == 2) and (self.get_winning_card_from_table(table_l, atout) == 0)
+					( (len(table_l) == 2) and (win_c_i == 0) and (table_l[win_c_i].suit != atout) )
 				   or
-					(len(table_l) == 3) and (self.get_winning_card_from_table(table_l, atout) == 1)
+					( (len(table_l) == 3) and (win_c_i == 1) and (table_l[win_c_i].suit != atout) )
 				):
 					b_partenaire_maitre = True
 
@@ -389,7 +550,7 @@ try:
 					winning_c_index = c_index
 					continue
 				
-				if (c.suit == winning_suit) and (c.get_points(atout) >= table_l[winning_c_index].get_points(atout)):
+				if (c.suit == winning_suit) and (c.get_rank(atout) >= table_l[winning_c_index].get_rank(atout)):
 					winning_c_index = c_index
 			
 			# ensure winning card has the winning suit
@@ -408,7 +569,7 @@ try:
 	
 	class Belote(object):	
 				
-		def __init__(self):
+		def __init__(self, hj_i = None):
 		
 			self.deck_l	   = None
 			self.joueurs_l = None
@@ -416,34 +577,100 @@ try:
 			self.winning_player = None
 			self.b_left_click = False
 			self.atout = None
+			self.hj_i = hj_i
+			self.preneur = None
+			self.dealer = 0
+			
+			# dialog boxes
+			self.yesno_box = None
+			self.message_box = None
 			
 			self.play_thread = None
 			self.b_play_thread_abort_queue = queue.Queue()
 			
 			self.t = 0
 
+		def b_decide_de_prendre_a_une(self, joueur, table_l):
+		
+			c = table_l[0]
+			
+			if not joueur.b_human:
+			
+				if c.rank == 'V':
+					return True
+				elif joueur.hand_l.b_has_card(rank = 'V', suit = c.suit):
+					return True
+				else:
+					return False
+					
+			else:
+				
+				return self.wait_for_user_answer(message = "Voulez-vous prendre à une?")
+
 		def run_play_thread(self):
 
 			# initialise deck and joueurs
 			self.deck_l	   = Deck(CsvObjectGenerator(Carte).generate_from_csv(csv_path = r'C:\Users\rex87\belote2\belote\cartes.csv' ))
 			self.joueurs_l = CsvObjectGenerator(Joueur).generate_from_csv(csv_path = r'C:\Users\rex87\belote2\belote\joueurs.csv')
+			self.joueurs_l[self.hj_i].b_human = True
 
-			# shuffle the deck
-			random.shuffle(self.deck_l)
-			
-			# quick distribution of cards
-			for i in range(8):
-				for j in self.joueurs_l:
-					j.hand_l.append(self.deck_l.pop())
-			
-			self.atout = "Trefle"
-
-			# game
 			self.table_l = Deck([])
 			team1_l   = Deck([])
 			team2_l   = Deck([])
+
+			# shuffle the deck
+			LOG.debug("Shuffle the deck ...")
+			random.shuffle(self.deck_l)
+			
+			# distribution of cards
+			# for i in range(8):
+				# for j in self.joueurs_l:
+					# j.hand_l.append(self.deck_l.pop())
+			
+			self.winning_player = 0 # only there to define a slot on the table
+			while True:
+				LOG.debug("Première distribution ...")
+				for j_index_, j in enumerate(self.joueurs_l):
+					j_index = (j_index_ + self.dealer)%4
+					for i in range(3):
+						j.hand_l.append(self.deck_l.pop())
+				for j_index_, j in enumerate(self.joueurs_l):
+					j_index = (j_index_ + self.dealer)%4
+					for i in range(2):
+						j.hand_l.append(self.deck_l.pop())
+				self.table_l.append(self.deck_l.pop())
+				
+				for j_index, j in enumerate(self.joueurs_l):
+					LOG.debug("{}: {}".format(j.name, j.hand_l))
+				
+				for j_index_, j in enumerate(self.joueurs_l):
+					j_index = (j_index_ + self.dealer)%4
+					if self.b_decide_de_prendre_a_une(j, self.table_l):
+						self.atout = self.table_l[0].suit
+						self.preneur = j_index
+						message_text = "{} prend à {}!".format(j.name, self.atout)
+						LOG.debug(message_text)
+						self.wait_for_user_click(message = message_text)
+						j.hand_l.append(self.table_l.pop())
+						break
+					else:
+						LOG.debug("{} ne prend pas à une.".format(j.name))
+				else:
+					continue
+					
+				break
+				
+			for j_index, j in enumerate(self.joueurs_l):
+				if j_index == self.preneur:
+					for i in range(2):
+						j.hand_l.append(self.deck_l.pop())				
+				else:				
+					for i in range(3):
+						j.hand_l.append(self.deck_l.pop())
+
+			# game
 			points_sum = 0
-			self.winning_player = 0
+			self.winning_player = self.preneur
 			for round_i in range(8):
 
 				for j in self.joueurs_l:
@@ -463,10 +690,11 @@ try:
 					j = self.joueurs_l[j_index]
 					
 					# player plays a card
+					self.message_box = StatusBox("À {} de jouer.".format(j.name))
 					played_card = j.play_a_card(self.table_l, self.atout, Regles(), self.b_play_thread_abort_queue)
 					self.table_l.append(played_card)
 						
-					time.sleep(0.5)
+					time.sleep(0.3)
 				
 				winning_c_index = Regles().get_winning_card_from_table(self.table_l, self.atout)
 				next_winning_player = (self.winning_player+winning_c_index)%4
@@ -480,23 +708,10 @@ try:
 					)
 				)
 				
-				LOG.debug("Waiting for user to click anywhere")
-				self.b_left_click = False
-				while True:
-					
-					try:
-						b_play_thread_abort = self.b_play_thread_abort_queue.get(block = False)
-						if b_play_thread_abort:
-							raise Exception("Aborted while waiting for user to click anywhere")
-					except queue.Empty:
-						pass
-						
-					if self.b_left_click:
-						break
-						
-					time.sleep(1/FPS)
+				self.wait_for_user_click(message = "{} gagne ce tour.".format(self.joueurs_l[next_winning_player]))
 				
 				self.winning_player = next_winning_player
+				self.dealer = (self.dealer + 1)%4
 				
 				# end of round: empty table and in winning team's pile
 				if self.winning_player%2 == 0:
@@ -524,9 +739,51 @@ try:
 			self.play_thread_count += 1
 			self.play_thread = threading.Timer(.01, self.run_play_thread)
 			self.play_thread.name = "play_thread_{}".format(self.play_thread_count)
+			self.play_thread.daemon = True
 			self.play_thread.start()
 			# return (team1_points, team2_points)
-	
+			return
+
+		def wait_for_user_click(self, message = None):
+			LOG.debug("Waiting for user to click anywhere")
+			self.message_box = StatusBox(message)
+			self.b_left_click = False
+			while True:
+				
+				try:
+					b_play_thread_abort = self.b_play_thread_abort_queue.get(block = False)
+					if b_play_thread_abort:
+						raise Exception("Aborted while waiting for user to click anywhere")
+				except queue.Empty:
+					pass
+					
+				if self.b_left_click:
+					break
+					
+				time.sleep(0.05)
+				
+			self.message_box = None
+			
+		def wait_for_user_answer(self, message = None):
+			LOG.debug("Waiting for user to answer question")
+			human_answer = None
+			self.yesno_box = YesNoBox(message, 200, 350, 400, 100)
+			while True:
+
+				try:
+					b_play_thread_abort = self.b_play_thread_abort_queue.get(block = False)
+					if b_play_thread_abort:
+						raise Exception("Aborted while waiting for user to click anywhere")
+				except queue.Empty:
+					pass
+
+				if self.yesno_box.answer is not None:
+					answer = self.yesno_box.answer
+					self.yesno_box = None
+					return answer
+				
+				time.sleep(0.05)
+
 		def run_test_thread(self):
 			
 			ClockFrequency = 60
@@ -552,10 +809,10 @@ try:
 	
 		def start_all_threads(self):
 			
-			# self.test_thread = threading.Thread(target = self.run_test_thread)			
+			# self.test_thread = threading.Thread(target = self.run_test_thread, daemon = True)			
 			# self.test_thread.start()
 			
-			self.play_thread = threading.Thread(name = "play_thread_1", target = self.run_play_thread)
+			self.play_thread = threading.Thread(name = "play_thread_1", target = self.run_play_thread, daemon = True)
 			self.play_thread.start()
 			self.play_thread_count = 1
 			
@@ -584,13 +841,17 @@ try:
 	screen_height = 600
 
 	BLACK_COLOUR = (0, 0, 0)
-	GREEN_COLOUR = (0, 127, 0)
 	WHITE_COLOUR = (255, 255, 255)
+	GREEN_COLOUR = (0, 128, 0)
+	GREY_COLOUR = (64, 64, 64)
+	RED_COLOUR = (255, 0, 0)
+	BLUE_COLOUR = (0, 0, 255)
 
+	LOG.debug("Create GUI window ...")
 	pygame.init()
 	pygame.font.init()
 	
-	myfont = pygame.font.SysFont('Consolas', 30)
+	myfont = pygame.font.Font('freesansbold.ttf', 30)
 	
 	screen = pygame.display.set_mode((screen_width, screen_height))
 
@@ -604,12 +865,12 @@ try:
 
 	FPS = 30
 
-	b_obj = Belote()
+	hj_i = 2 # human joueur id
+	
+	b_obj = Belote(hj_i)
+	LOG.debug("Start belote thread ...")
 	b_obj.start_all_threads()
 	time.sleep(0.1)
-	
-	hj = 2 # human joueur id
-	b_obj.joueurs_l[hj].b_human = True
 
 	# table cards coordinates
 	tx = 320
@@ -647,18 +908,25 @@ try:
 		suit_images_d[fname] = pygame.image.load(os.path.join(this_folder, r'..\images\cards\{}.png'.format(fname)))
 		suit_images_d[fname].convert_alpha()
 		suit_images_d[fname] = pygame.transform.smoothscale(suit_images_d[fname], (statusbar_height, statusbar_height))
+	disabled_card_surface = pygame.Surface(card_images_d['Pique']['7'].get_size())
+	disabled_card_surface.fill(GREY_COLOUR)
+	disabled_card_surface.set_alpha(128)
+	disabled_card_surface.convert_alpha()
 	
 	# surfaces for names of the joueurs
-	human_joueur_name = myfont.render(b_obj.joueurs_l[(hj+0)%4].name, True, (0, 0, 0))
-	joueur_left_name  = myfont.render(b_obj.joueurs_l[(hj+1)%4].name, True, (0, 0, 0))
-	joueur_top_name   = myfont.render(b_obj.joueurs_l[(hj+2)%4].name, True, (0, 0, 0))
-	joueur_right_name = myfont.render(b_obj.joueurs_l[(hj+3)%4].name, True, (0, 0, 0))
+	human_joueur_name = myfont.render(b_obj.joueurs_l[(hj_i+0)%4].name, True, (0, 0, 0))
+	joueur_left_name  = myfont.render(b_obj.joueurs_l[(hj_i+1)%4].name, True, (0, 0, 0))
+	joueur_top_name   = myfont.render(b_obj.joueurs_l[(hj_i+2)%4].name, True, (0, 0, 0))
+	joueur_right_name = myfont.render(b_obj.joueurs_l[(hj_i+3)%4].name, True, (0, 0, 0))
 
 	b_playing = True
 	last_time = 0
 	hand_y_idle = screen_height - 120
 	hand_y_sel_offset = -50
+	LOG.debug("Start GUI main thread ...")
 	while b_playing:
+	
+		human_j = b_obj.joueurs_l[hj_i]
 	
 		# pygame events
 		b_left_click = False
@@ -672,9 +940,9 @@ try:
 				b_obj.b_left_click = True
 				b_left_click = True
 				# LOG.info(mouse_pos)
-		
-		# the nice green background
-		background.fill(GREEN_COLOUR)
+			
+			if b_obj.yesno_box is not None: 			
+				b_obj.yesno_box.handle_event(event)
 		
 		# update card selection
 		b_hand_card_selected_l = [False]*8
@@ -682,45 +950,66 @@ try:
 			
 			for hand_i in range(8):
 				
-				if mouse_pos[0] >= get_hand_x(7+1):
-					b_hand_card_selected_l[7] = True
-					
-				if mouse_pos[0] < get_hand_x(hand_i+1):
-					b_hand_card_selected_l[hand_i] = True
-					break
+				if hand_i in human_j.allowed_card_index_l:
+				
+					# if mouse_pos[0] >= get_hand_x(7+1):
+						# b_hand_card_selected_l[7] = True
+						
+					if mouse_pos[0] >= get_hand_x(hand_i) and mouse_pos[0] < get_hand_x(hand_i+1):
+						b_hand_card_selected_l[hand_i] = True
+						break
 			
 			if b_left_click:
-				b_obj.joueurs_l[hj].human_choice = hand_i
+				human_j.human_choice = hand_i
+		
+		# update buttons
+		if b_obj.yesno_box is not None: 
+			b_obj.yesno_box.update()
+		
+		# the nice green background
+		background.fill(GREEN_COLOUR)		
 		
 		# update table
 		for table_i, table_card in enumerate(b_obj.table_l):
 			
-			table_coord_i = (table_i - hj + b_obj.winning_player)%4
+			table_coord_i = (table_i - hj_i + b_obj.winning_player)%4
 			
 			table_x = table_coord_l[table_coord_i][0]
 			table_y = table_coord_l[table_coord_i][1]
 			background.blit(card_images_d[table_card.suit][table_card.rank], (table_x, table_y))
 			
 		# update card sprites
-		for hand_i, hand_card in enumerate(b_obj.joueurs_l[hj].hand_l):
+		for hand_i, hand_card in enumerate(human_j.hand_l):
 			
 			hand_x = get_hand_x(hand_i)
 			hand_y = hand_y_idle + hand_y_sel_offset*b_hand_card_selected_l[hand_i]
 			
 			background.blit(card_images_d[hand_card.suit][hand_card.rank], (hand_x, hand_y))
+			if hand_i not in human_j.allowed_card_index_l:
+				background.blit(disabled_card_surface, (hand_x, hand_y))
 		
 		# display other players' names
-		background.blit(joueur_left_name , (0                  , int(4*screen_height/9)))
-		background.blit(joueur_top_name  , (int(screen_width/2), 0                     ))
-		background.blit(joueur_right_name, (screen_width - 100 , int(5*screen_height/9)))
+		background.blit(joueur_left_name , (0                                                  , int(4*screen_height/9)        ))
+		background.blit(joueur_top_name  , (int((screen_width-joueur_top_name.get_width())/2)  , 0                             ))
+		background.blit(joueur_right_name, (screen_width - 100                                 , int(5*screen_height/9)        ))
 		
 		# STATUS BAR
 		statusbar.fill(WHITE_COLOUR)
 		background.blit(statusbar, (0, screen_height - statusbar_height))
-		background.blit(human_joueur_name, (int((screen_width-human_joueur_name.get_width())/2), screen_height-statusbar_height))
-		atout_image = suit_images_d[b_obj.atout.lower()]
-		background.blit(atout_image, (screen_width-atout_image.get_width(), screen_height-atout_image.get_height()))
+		# import IPython; IPython.embed(colors='Neutral')
+		background.blit(human_joueur_name, (int(3*screen_width/4), screen_height-statusbar_height))
+		if b_obj.atout is not None:
+			atout_image = suit_images_d[b_obj.atout.lower()]
+			background.blit(atout_image, (screen_width-atout_image.get_width(), screen_height-atout_image.get_height()))
 		
+		# question
+		if b_obj.yesno_box is not None: 
+			b_obj.yesno_box.draw(background)
+			
+		# message
+		if b_obj.message_box is not None:
+			b_obj.message_box.draw(background)
+	
 		# Screen refresh
 		now = time.time()
 		if (now - last_time) > (1/FPS):
