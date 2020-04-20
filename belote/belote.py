@@ -89,6 +89,52 @@ try:
 					
 			return False
 
+	class ImageButton():
+
+		def __init__(self, image_surface, x=0, y=0):
+			
+			self.image_surface = image_surface
+			
+			self.rect = image_surface.get_rect()
+			
+			self.image_normal = pygame.Surface(image_surface.get_size())
+			self.image_normal.fill(WHITE_COLOUR)
+
+			self.image_hovered = pygame.Surface(image_surface.get_size())
+			self.image_hovered.fill(GREEN_COLOUR)
+			
+			self.image_normal.blit(image_surface, self.rect)
+			self.image_hovered.blit(image_surface, self.rect)
+			
+			self.image = self.image_normal
+
+			# you can't use it before `blit` 
+			self.rect.topleft = (x, y)
+
+			self.hovered = False
+
+		def update(self):
+
+			if self.hovered:
+				self.image = self.image_hovered
+			else:
+				self.image = self.image_normal
+			
+		def draw(self, surface):
+
+			surface.blit(self.image, self.rect)
+
+		def handle_event(self, event):
+
+			if event.type == pygame.MOUSEMOTION:
+				self.hovered = self.rect.collidepoint(event.pos)
+			elif event.type == pygame.MOUSEBUTTONDOWN:
+				if self.hovered:
+					LOG.debug('Clicked: {}, ID = {}'.format(self.image_surface, id(self.image_surface)))
+					return True
+					
+			return False
+
 	class YesNoBox():
 	
 		def __init__(self, question_text, x=0, y=0, width=100, height=50, command=None):
@@ -135,6 +181,61 @@ try:
 				self.answer = True
 			if self.non_button.handle_event(event_):
 				self.answer = False
+
+	class DeuxBox():
+	
+		def __init__(self, suit_images_d, x = 0, y = 0, width = 100, height = 50):
+			
+			font = pygame.font.Font('freesansbold.ttf', 20)			
+
+			self.bg = pygame.Surface((width, height))
+			self.bg_rect = self.bg.get_rect()
+			
+			qtext_image = font.render("Voulez-vous prendre à deux?", True, WHITE_COLOUR)
+			qtext_rect = qtext_image.get_rect(center = (self.bg_rect.center[0], int(self.bg_rect.center[1]/2)))
+			
+			self.bg.blit(qtext_image, qtext_rect)
+
+			x_offset = 35
+			self.pique_button   = ImageButton(suit_images_d['pique']  , x_offset+0  , 45)
+			self.coeur_button   = ImageButton(suit_images_d['coeur']  , x_offset+70 , 45)		
+			self.carreau_button = ImageButton(suit_images_d['carreau'], x_offset+140, 45)		
+			self.trefle_button  = ImageButton(suit_images_d['trefle'] , x_offset+210, 45)		
+			self.non_button     = Button('NON'                        , x_offset+280, 45, 42, 42)		
+			
+			self.bg_rect.topleft = (x, y)
+			
+			self.answer = None
+			
+		def update(self):
+			
+			self.pique_button.update()
+			self.coeur_button.update()
+			self.carreau_button.update()
+			self.trefle_button.update()
+			self.non_button.update()
+			
+		def draw(self, surface):
+	
+			self.pique_button.draw(self.bg)
+			self.coeur_button.draw(self.bg)
+			self.carreau_button.draw(self.bg)
+			self.trefle_button.draw(self.bg)
+			self.non_button.draw(self.bg)
+	
+			surface.blit(self.bg, self.bg_rect)			
+
+		def handle_event(self, event):
+
+			event_ = event		
+			if event.type == pygame.MOUSEMOTION:
+				event_.pos = (event.pos[0] - self.bg_rect.topleft[0], event.pos[1] - self.bg_rect.topleft[1])
+				
+			if self.pique_button.handle_event(event_)  : self.answer = 'Pique'
+			if self.coeur_button.handle_event(event_)  : self.answer = 'Coeur' 
+			if self.carreau_button.handle_event(event_): self.answer = 'Carreau'
+			if self.trefle_button.handle_event(event_) : self.answer = 'Trefle' 
+			if self.non_button.handle_event(event_)    : self.answer = False 
 
 	class MessageBox():
 	
@@ -248,10 +349,10 @@ try:
 					"7"  : 0,
 					"8"  : 1,
 					"9"  : 2,
-					"10" : 3,
-					"V"  : 4,
-					"D"  : 5,
-					"R"  : 6,
+					"V"  : 3,
+					"D"  : 4,
+					"R"  : 5,
+					"10" : 6,
 					"A"  : 7,
 				}[self.rank]			
 
@@ -276,10 +377,10 @@ try:
 					"7"  : 0,
 					"8"  : 0,
 					"9"  : 0,
-					"10" : 10,
 					"V"  : 2,
 					"D"  : 3,
 					"R"  : 4,
+					"10" : 10,
 					"A"  : 11,
 				}[self.rank]					
 
@@ -297,27 +398,24 @@ try:
 				dix_de_der = 10
 			
 			return sum([c.get_points(atout) for c in self]) + dix_de_der
-
-		def b_has_suit(self, suit = None):
-			
-			for c in self:
-				if c.suit == suit:
-					return True
-			return False
-		
-		def b_has_rank(self, rank = None):
-			
-			for c in self:
-				if c.rank == rank:
-					return True
-			return False
 			
 		def b_has_card(self, rank = None, suit = None):
 			
+			assert((rank is not None) or (suit is not None))
+			
 			for c in self:
-				if c.rank == rank and c.suit == suit:
-					return True
-			return False
+				
+				if rank is None:
+					card_condition = (c.suit == suit)
+				elif suit is None:
+					card_condition = (c.rank == rank)
+				else:
+					card_condition = (c.rank == rank and c.suit == suit)
+			
+				if card_condition:
+					return True, c
+			
+			return False, None
 		
 		def __str__(self):
 		
@@ -332,7 +430,7 @@ try:
 			self.b_human = False
 			self.b_thinking = False
 			self.human_choice = None
-			self.allowed_card_index_l = []
+			self.allowed_card_index_l = None
 			
 		def __repr__(self):
 			
@@ -584,36 +682,23 @@ try:
 			# dialog boxes
 			self.yesno_box = None
 			self.message_box = None
+			self.deux_box = None
 			
 			self.play_thread = None
 			self.b_play_thread_abort_queue = queue.Queue()
 			
 			self.t = 0
-
-		def b_decide_de_prendre_a_une(self, joueur, table_l):
 		
-			c = table_l[0]
-			
-			if not joueur.b_human:
-			
-				if c.rank == 'V':
-					return True
-				elif joueur.hand_l.b_has_card(rank = 'V', suit = c.suit):
-					return True
-				else:
-					return False
-					
-			else:
-				
-				return self.wait_for_user_answer(message = "Voulez-vous prendre à une?")
-
 		def run_play_thread(self):
 
 			# initialise deck and joueurs
 			self.deck_l	   = Deck(CsvObjectGenerator(Carte).generate_from_csv(csv_path = r'C:\Users\rex87\belote2\belote\cartes.csv' ))
 			self.joueurs_l = CsvObjectGenerator(Joueur).generate_from_csv(csv_path = r'C:\Users\rex87\belote2\belote\joueurs.csv')
-			self.joueurs_l[self.hj_i].b_human = True
+			
+			if self.hj_i is not None:
+				self.joueurs_l[self.hj_i].b_human = True
 
+			self.atout = None
 			self.table_l = Deck([])
 			team1_l   = Deck([])
 			team2_l   = Deck([])
@@ -629,7 +714,7 @@ try:
 			
 			self.winning_player = 0 # only there to define a slot on the table
 			while True:
-				LOG.debug("Première distribution ...")
+				LOG.debug("Premiere distribution...")
 				for j_index_, j in enumerate(self.joueurs_l):
 					j_index = (j_index_ + self.dealer)%4
 					for i in range(3):
@@ -643,6 +728,7 @@ try:
 				for j_index, j in enumerate(self.joueurs_l):
 					LOG.debug("{}: {}".format(j.name, j.hand_l))
 				
+				LOG.debug("Tour de une...")
 				for j_index_, j in enumerate(self.joueurs_l):
 					j_index = (j_index_ + self.dealer)%4
 					if self.b_decide_de_prendre_a_une(j, self.table_l):
@@ -655,11 +741,29 @@ try:
 						break
 					else:
 						LOG.debug("{} ne prend pas à une.".format(j.name))
-				else:
-					continue
-					
-				break
 				
+				if self.atout is not None:
+					break
+				else:
+					LOG.debug("Tour de deux...")
+					for j_index_, j in enumerate(self.joueurs_l):
+						j_index = (j_index_ + self.dealer)%4
+						b_j_answer, atout = self.b_decide_de_prendre_a_deux(j, self.table_l)
+						if b_j_answer:
+							self.atout = atout
+							self.preneur = j_index
+							message_text = "{} prend à {}!".format(j.name, self.atout)
+							LOG.debug(message_text)
+							self.wait_for_user_click(message = message_text)
+							j.hand_l.append(self.table_l.pop())
+							break
+						else:
+							LOG.debug("{} ne prend pas à deux.".format(j.name))
+					
+					break
+							
+			assert (self.atout is not None)
+			
 			for j_index, j in enumerate(self.joueurs_l):
 				if j_index == self.preneur:
 					for i in range(2):
@@ -744,6 +848,51 @@ try:
 			# return (team1_points, team2_points)
 			return
 
+		def b_decide_de_prendre_a_une(self, joueur, table_l):
+		
+			c = table_l[0]
+			
+			if not joueur.b_human:
+			
+				if c.rank == 'V':
+					return True
+				else:
+					b_has_atout_v, atout_v_c = joueur.hand_l.b_has_card(rank = 'V', suit = c.suit)
+					if b_has_atout_v:
+						return True
+					else:
+						return False
+					
+			else:
+				
+				return self.wait_for_user_answer(message = "Voulez-vous prendre à une?")
+
+		def b_decide_de_prendre_a_deux(self, joueur, table_l):
+		
+			c = table_l[0]
+			
+			b_answer = None
+			atout = None
+			if not joueur.b_human:
+			
+				b_has_v, v_c = joueur.hand_l.b_has_card(rank = 'V')
+				if b_has_v:
+					b_answer = True
+					atout = v_c.suit
+				else:
+					b_answer = False
+					
+			else:
+				
+				answer_a_deux = self.wait_for_user_answer_a_deux()
+				if answer_a_deux == False:
+					b_answer = False
+				else:
+					b_answer = True
+					atout = answer_a_deux
+			
+			return b_answer, atout
+
 		def wait_for_user_click(self, message = None):
 			LOG.debug("Waiting for user to click anywhere")
 			self.message_box = StatusBox(message)
@@ -760,7 +909,7 @@ try:
 				if self.b_left_click:
 					break
 					
-				time.sleep(0.05)
+				time.sleep(0.02)
 				
 			self.message_box = None
 			
@@ -782,7 +931,27 @@ try:
 					self.yesno_box = None
 					return answer
 				
-				time.sleep(0.05)
+				time.sleep(0.02)
+
+		def wait_for_user_answer_a_deux(self):
+			LOG.debug("Waiting for user to answer question à deux")
+			human_answer = None
+			self.deux_box = DeuxBox(suit_images_d, 200, 350, 400, 100)
+			while True:
+
+				try:
+					b_play_thread_abort = self.b_play_thread_abort_queue.get(block = False)
+					if b_play_thread_abort:
+						raise Exception("Aborted while waiting for user to click anywhere")
+				except queue.Empty:
+					pass
+
+				if self.deux_box.answer is not None:
+					answer = self.deux_box.answer
+					self.deux_box = None
+					return answer
+				
+				time.sleep(0.02)
 
 		def run_test_thread(self):
 			
@@ -865,13 +1034,6 @@ try:
 
 	FPS = 30
 
-	hj_i = 2 # human joueur id
-	
-	b_obj = Belote(hj_i)
-	LOG.debug("Start belote thread ...")
-	b_obj.start_all_threads()
-	time.sleep(0.1)
-
 	# table cards coordinates
 	tx = 320
 	ty = 120
@@ -882,6 +1044,10 @@ try:
 		(tx + to2, ty - to1),
 		(tx + to1, ty + to2),
 	]
+
+	# hand coordinates
+	hand_y_idle = screen_height - 120
+	hand_y_sel_offset = -50
 
 	# load card images
 	card_images_d = {}
@@ -907,23 +1073,31 @@ try:
 	for fname in ['pique', 'coeur', 'carreau', 'trefle']:
 		suit_images_d[fname] = pygame.image.load(os.path.join(this_folder, r'..\images\cards\{}.png'.format(fname)))
 		suit_images_d[fname].convert_alpha()
-		suit_images_d[fname] = pygame.transform.smoothscale(suit_images_d[fname], (statusbar_height, statusbar_height))
+		# suit_images_d[fname] = pygame.transform.smoothscale(suit_images_d[fname], (statusbar_height, statusbar_height))
 	disabled_card_surface = pygame.Surface(card_images_d['Pique']['7'].get_size())
 	disabled_card_surface.fill(GREY_COLOUR)
 	disabled_card_surface.set_alpha(128)
 	disabled_card_surface.convert_alpha()
 	
+	hj_i = 1 # human joueur id
+	b_obj = Belote(hj_i)
+	LOG.debug("Start belote thread ...")
+	b_obj.start_all_threads()
+	time.sleep(0.1)
+
 	# surfaces for names of the joueurs
 	human_joueur_name = myfont.render(b_obj.joueurs_l[(hj_i+0)%4].name, True, (0, 0, 0))
 	joueur_left_name  = myfont.render(b_obj.joueurs_l[(hj_i+1)%4].name, True, (0, 0, 0))
 	joueur_top_name   = myfont.render(b_obj.joueurs_l[(hj_i+2)%4].name, True, (0, 0, 0))
 	joueur_right_name = myfont.render(b_obj.joueurs_l[(hj_i+3)%4].name, True, (0, 0, 0))
-
-	b_playing = True
-	last_time = 0
-	hand_y_idle = screen_height - 120
-	hand_y_sel_offset = -50
+	joueur_left_name_coord  = (0                                                  , int(4*screen_height/9)        )
+	joueur_top_name_coord   = (int((screen_width-joueur_top_name.get_width())/2)  , 0                             )
+	joueur_right_name_coord = (screen_width - 100                                 , int(5*screen_height/9)        )
+	human_joueur_name_coord = (int(3*screen_width/4), screen_height-statusbar_height)
+	
 	LOG.debug("Start GUI main thread ...")
+	b_playing = True
+	last_refreshed_time = 0
 	while b_playing:
 	
 		human_j = b_obj.joueurs_l[hj_i]
@@ -943,28 +1117,35 @@ try:
 			
 			if b_obj.yesno_box is not None: 			
 				b_obj.yesno_box.handle_event(event)
+			
+			if b_obj.deux_box is not None: 			
+				b_obj.deux_box.handle_event(event)
 		
 		# update card selection
 		b_hand_card_selected_l = [False]*8
-		if mouse_pos[1] > hand_y_idle + hand_y_sel_offset: 
-			
-			for hand_i in range(8):
+		if human_j.allowed_card_index_l is not None:
+			if mouse_pos[1] > hand_y_idle + hand_y_sel_offset: 
 				
-				if hand_i in human_j.allowed_card_index_l:
+				for hand_i in range(8):
+					
+					
+					if hand_i in human_j.allowed_card_index_l:
+					
+						# if mouse_pos[0] >= get_hand_x(7+1):
+							# b_hand_card_selected_l[7] = True
+							
+						if mouse_pos[0] >= get_hand_x(hand_i) and mouse_pos[0] < get_hand_x(hand_i+1):
+							b_hand_card_selected_l[hand_i] = True
+							break
 				
-					# if mouse_pos[0] >= get_hand_x(7+1):
-						# b_hand_card_selected_l[7] = True
-						
-					if mouse_pos[0] >= get_hand_x(hand_i) and mouse_pos[0] < get_hand_x(hand_i+1):
-						b_hand_card_selected_l[hand_i] = True
-						break
-			
-			if b_left_click:
-				human_j.human_choice = hand_i
+				if b_left_click:
+					human_j.human_choice = hand_i
 		
-		# update buttons
+		# update question box if necessary
 		if b_obj.yesno_box is not None: 
 			b_obj.yesno_box.update()
+		if b_obj.deux_box is not None:		
+			b_obj.deux_box.update()
 		
 		# the nice green background
 		background.fill(GREEN_COLOUR)		
@@ -985,39 +1166,43 @@ try:
 			hand_y = hand_y_idle + hand_y_sel_offset*b_hand_card_selected_l[hand_i]
 			
 			background.blit(card_images_d[hand_card.suit][hand_card.rank], (hand_x, hand_y))
-			if hand_i not in human_j.allowed_card_index_l:
-				background.blit(disabled_card_surface, (hand_x, hand_y))
+			if human_j.allowed_card_index_l is not None:
+				if hand_i not in human_j.allowed_card_index_l:
+					background.blit(disabled_card_surface, (hand_x, hand_y))
 		
 		# display other players' names
-		background.blit(joueur_left_name , (0                                                  , int(4*screen_height/9)        ))
-		background.blit(joueur_top_name  , (int((screen_width-joueur_top_name.get_width())/2)  , 0                             ))
-		background.blit(joueur_right_name, (screen_width - 100                                 , int(5*screen_height/9)        ))
+		background.blit(joueur_left_name , joueur_left_name_coord)
+		background.blit(joueur_top_name  , joueur_top_name_coord  )
+		background.blit(joueur_right_name, joueur_right_name_coord)
 		
 		# STATUS BAR
 		statusbar.fill(WHITE_COLOUR)
 		background.blit(statusbar, (0, screen_height - statusbar_height))
-		# import IPython; IPython.embed(colors='Neutral')
-		background.blit(human_joueur_name, (int(3*screen_width/4), screen_height-statusbar_height))
+		background.blit(human_joueur_name, human_joueur_name_coord)
+		
+		# atout icon
 		if b_obj.atout is not None:
 			atout_image = suit_images_d[b_obj.atout.lower()]
 			background.blit(atout_image, (screen_width-atout_image.get_width(), screen_height-atout_image.get_height()))
 		
-		# question
+		# draw question box if necessary
 		if b_obj.yesno_box is not None: 
 			b_obj.yesno_box.draw(background)
+		if b_obj.deux_box is not None:
+			b_obj.deux_box.draw(background)
 			
-		# message
+		# status message
 		if b_obj.message_box is not None:
-			b_obj.message_box.draw(background)
+			b_obj.message_box.draw(background)	
 	
 		# Screen refresh
 		now = time.time()
-		if (now - last_time) > (1/FPS):
+		if (now - last_refreshed_time) > (1/FPS):
 			screen.blit(background, (0, 0))
 			pygame.display.flip()
-			last_time = time.time()
+			last_refreshed_time = time.time()
 		else:
-			milliseconds_left = int(1000*((1/FPS) - (now - last_time)))
+			milliseconds_left = int(1000*((1/FPS) - (now - last_refreshed_time)))
 			pygame.time.wait(milliseconds_left)
 			
 ## -------- SOMETHING WENT WRONG -----------------------------	
