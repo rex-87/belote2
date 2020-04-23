@@ -40,15 +40,15 @@ try:
 
 	class Button():
 
-		def __init__(self, text, x=0, y=0, width=100, height=50, command=None):
+		def __init__(self, text, x=0, y=0, wid=100, hei=50, command=None):
 
 			self.text = text
 			self.command = command
 			
-			self.image_normal = pygame.Surface((width, height))
+			self.image_normal = pygame.Surface((wid, hei))
 			self.image_normal.fill(GREEN_COLOUR)
 
-			self.image_hovered = pygame.Surface((width, height))
+			self.image_hovered = pygame.Surface((wid, hei))
 			self.image_hovered.fill(RED_COLOUR)
 
 			self.image = self.image_normal
@@ -137,14 +137,14 @@ try:
 
 	class YesNoBox():
 	
-		def __init__(self, question_text, x=0, y=0, width=100, height=50, command=None):
+		def __init__(self, question_text, x=0, y=0, wid=100, hei=50, command=None):
 			
 			self.question_text = question_text
 			self.command = command
 			
 			font = pygame.font.Font('freesansbold.ttf', 20)			
 
-			self.bg = pygame.Surface((width, height))
+			self.bg = pygame.Surface((wid, hei))
 			self.bg_rect = self.bg.get_rect()
 			
 			qtext_image = font.render(question_text, True, WHITE_COLOUR)
@@ -184,11 +184,11 @@ try:
 
 	class DeuxBox():
 	
-		def __init__(self, suit_images_d, x = 0, y = 0, width = 100, height = 50):
+		def __init__(self, suit_images_d, x = 0, y = 0, wid = 100, hei = 50):
 			
 			font = pygame.font.Font('freesansbold.ttf', 20)			
 
-			self.bg = pygame.Surface((width, height))
+			self.bg = pygame.Surface((wid, hei))
 			self.bg_rect = self.bg.get_rect()
 			
 			qtext_image = font.render("Voulez-vous prendre à deux?", True, WHITE_COLOUR)
@@ -239,13 +239,13 @@ try:
 
 	class MessageBox():
 	
-		def __init__(self, message_text, x=0, y=0, width=100, height=50):
+		def __init__(self, message_text, x=0, y=0, wid=100, hei=50):
 			
 			self.message_text = message_text
 			
 			font = pygame.font.Font('freesansbold.ttf', 20)			
 
-			self.bg = pygame.Surface((width, height))
+			self.bg = pygame.Surface((wid, hei))
 			self.bg.fill(WHITE_COLOUR)
 			self.bg_rect = self.bg.get_rect()
 			
@@ -272,7 +272,7 @@ try:
 			return
 
 	def StatusBox(message = ""):
-		return MessageBox(message, 0, screen_height - statusbar_height, 550, statusbar_height)
+		return MessageBox(message, 0, scr_hei - stabar_hei, 550, stabar_hei)
 
 	class CsvObjectGenerator(object):
 		
@@ -690,6 +690,25 @@ try:
 			
 			self.t = 0
 		
+		def my_time_sleep(self, duration):
+			
+			if duration <= 0.05:
+				time.sleep(0.05)
+			else:
+				start_time = time.time()
+				while True:
+					try:
+						b_play_thread_abort = self.b_play_thread_abort_queue.get(block = False)
+						if b_play_thread_abort:
+							raise Exception("Aborted while choosing a card")
+					except queue.Empty:
+						pass
+					
+					if time.time() - start_time > duration:
+						break
+					else:
+						time.sleep(0.05)
+		
 		def run_play_thread(self):
 
 			# initialise deck and joueurs
@@ -714,70 +733,72 @@ try:
 					# j.hand_l.append(self.deck_l.pop())
 			
 			self.winning_player = self.dealer # only there to define a slot on the table
-			while True:
-				LOG.debug("Première distribution...")
-				
-				self.message_box = StatusBox("{} fait la première distribution ...".format(self.joueurs_l[self.dealer].name))
-				
+
+			LOG.debug("Première distribution...")
+			
+			self.message_box = StatusBox("{} distribue les cartes ...".format(self.joueurs_l[self.dealer].name))
+			
+			for j_index_, j_ in enumerate(self.joueurs_l):
+				j_index = (j_index_ + self.dealer + 1)%4
+				j = self.joueurs_l[j_index]
+				for i in range(3):
+					j.hand_l.append(self.deck_l.pop())
+				self.my_time_sleep(1)
+			for j_index_, j_ in enumerate(self.joueurs_l):
+				j_index = (j_index_ + self.dealer + 1)%4
+				j = self.joueurs_l[j_index]
+				for i in range(2):
+					j.hand_l.append(self.deck_l.pop())
+				self.my_time_sleep(1)
+			self.table_l.append(self.deck_l.pop())
+			
+			for j_index, j in enumerate(self.joueurs_l):
+				LOG.debug("{}: {}".format(j.name, j.hand_l))
+			
+			LOG.debug("Tour de une...")
+			for j_index_, j_ in enumerate(self.joueurs_l):
+				j_index = (j_index_ + self.dealer + 1)%4
+				j = self.joueurs_l[j_index]
+				self.message_box = StatusBox("{} réfléchit ...".format(j.name))
+				if self.b_decide_de_prendre_a_une(j, self.table_l):
+					j.hand_l.append(self.table_l.pop())
+					break
+			
+			if self.atout is not None:
+				pass
+			else:
+				LOG.debug("Tour de deux...")
 				for j_index_, j_ in enumerate(self.joueurs_l):
 					j_index = (j_index_ + self.dealer + 1)%4
 					j = self.joueurs_l[j_index]
-					for i in range(3):
-						j.hand_l.append(self.deck_l.pop())
-					time.sleep(0.5)
-				for j_index_, j_ in enumerate(self.joueurs_l):
-					j_index = (j_index_ + self.dealer + 1)%4
-					j = self.joueurs_l[j_index]
-					for i in range(2):
-						j.hand_l.append(self.deck_l.pop())
-					time.sleep(0.5)
-				self.table_l.append(self.deck_l.pop())
-				
-				for j_index, j in enumerate(self.joueurs_l):
-					LOG.debug("{}: {}".format(j.name, j.hand_l))
-				
-				LOG.debug("Tour de une...")
-				for j_index_, j_ in enumerate(self.joueurs_l):
-					j_index = (j_index_ + self.dealer + 1)%4
-					j = self.joueurs_l[j_index]
-					self.message_box = StatusBox("{} réfléchit ...".format(j.name))
-					if self.b_decide_de_prendre_a_une(j, self.table_l):
+					self.message_box = StatusBox("{} réfléchit ...".format(j.name))				
+					b_j_answer, atout = self.b_decide_de_prendre_a_deux(j, self.table_l)
+					if b_j_answer:
 						j.hand_l.append(self.table_l.pop())
 						break
-				
-				if self.atout is not None:
-					break
-				else:
-					LOG.debug("Tour de deux...")
-					for j_index_, j_ in enumerate(self.joueurs_l):
-						j_index = (j_index_ + self.dealer + 1)%4
-						j = self.joueurs_l[j_index]
-						self.message_box = StatusBox("{} réfléchit ...".format(j.name))				
-						b_j_answer, atout = self.b_decide_de_prendre_a_deux(j, self.table_l)
-						if b_j_answer:
-							j.hand_l.append(self.table_l.pop())
-							break
 					
-					break
+			for j_key in ['human', 'top', 'left', 'right']:
+				j_loc_d[j_key]['speech_text'] = None
 				
 			assert (self.atout is not None)
 			
-			self.message_box = StatusBox("{} fait la deuxième distribution ...".format(self.joueurs_l[self.dealer].name))
-			time.sleep(2) # pour le fun
-			for j_index, j in enumerate(self.joueurs_l):
+			self.message_box = StatusBox("{} finit de distribuer ...".format(self.joueurs_l[self.dealer].name))
+			for j_index_, j_ in enumerate(self.joueurs_l):
+				j_index = (j_index_ + self.dealer + 1)%4
+				j = self.joueurs_l[j_index]
 				if j_index == self.preneur:
 					for i in range(2):
 						j.hand_l.append(self.deck_l.pop())				
 				else:				
 					for i in range(3):
 						j.hand_l.append(self.deck_l.pop())
-				time.sleep(0.5)
+				self.my_time_sleep(1)
 
 			self.message_box = None
 			
 			# game
 			points_sum = 0
-			self.winning_player = self.dealer + 1
+			self.winning_player = (self.dealer + 1)%4
 			for round_i in range(8):
 
 				for j in self.joueurs_l:
@@ -801,7 +822,7 @@ try:
 					played_card = j.play_a_card(self.table_l, self.atout, Regles(), self.b_play_thread_abort_queue)
 					self.table_l.append(played_card)
 						
-					time.sleep(0.5)
+					self.my_time_sleep(0.5)
 				
 				winning_c_index = Regles().get_winning_card_from_table(self.table_l, self.atout)
 				next_winning_player = (self.winning_player+winning_c_index)%4
@@ -858,7 +879,7 @@ try:
 			
 			if not joueur.b_human:
 			
-				time.sleep(2) # pour le fun			
+				self.my_time_sleep(0.5) # pour le fun			
 				
 				b_answer = None
 				
@@ -881,14 +902,14 @@ try:
 				self.winning_player = joueur.index # only there to define a slot on the table
 				self.atout = c.suit
 				self.preneur = joueur.index
+				j_loc_d[j_loc_d[joueur.index]]['speech_text'] = "JE PRENDS!"
 				self.wait_for_user_click(message = message_text)
 			else:
 				msg = '{} dit "UNE!"'.format(joueur.name)
 				LOG.debug(msg)
 				self.message_box = StatusBox(msg)
-				if not joueur.b_human:
-					time.sleep(2) # pour le fun	
-			
+				j_loc_d[j_loc_d[joueur.index]]['speech_text'] = "UNE!"	
+					
 			return b_answer 			
 
 		def b_decide_de_prendre_a_deux(self, joueur, table_l):
@@ -898,6 +919,8 @@ try:
 			b_answer = None
 			atout = None
 			if not joueur.b_human:
+			
+				self.my_time_sleep(0.5) # pour le fun	
 			
 				b_has_v, v_c = joueur.hand_l.b_has_card(rank = 'V')
 				if b_has_v:
@@ -921,13 +944,13 @@ try:
 				self.atout = atout
 				self.preneur = joueur.index
 				LOG.debug(message_text)
+				j_loc_d[j_loc_d[joueur.index]]['speech_text'] = "JE PRENDS!"
 				self.wait_for_user_click(message = message_text)
 			else:
 				msg = '{} dit "DEUX!"'.format(joueur.name)
 				LOG.debug(msg)
 				self.message_box = StatusBox(msg)
-				if not joueur.b_human:
-					time.sleep(2) # pour le fun			
+				j_loc_d[j_loc_d[joueur.index]]['speech_text'] = "DEUX!"			
 			
 			return b_answer, atout
 
@@ -1040,12 +1063,12 @@ try:
 			self.joinAllThreads()
 	
 	def get_hand_x(i):
-		return int(i*(screen_width-168)/7)
+		return int(i*(scr_wid-168)/7)
 	
 	this_folder = os.path.dirname(os.path.realpath(__file__))
 	
-	screen_width = 800
-	screen_height = 600
+	scr_wid = 800
+	scr_hei = 600
 
 	BLACK_COLOUR = (0, 0, 0)
 	WHITE_COLOUR = (255, 255, 255)
@@ -1054,6 +1077,7 @@ try:
 	RED_COLOUR = (255, 0, 0)
 	BLUE_COLOUR = (0, 0, 255)
 	YELLOW_COLOUR = (255, 255, 0)
+	LIGHT_BLUE_COLOUR = (255, 120, 110)
 	
 	class MouseButtons:
 		LEFT = 1
@@ -1068,15 +1092,15 @@ try:
 	
 	myfont = pygame.font.Font('freesansbold.ttf', 30)
 	
-	screen = pygame.display.set_mode((screen_width, screen_height))
+	scr = pygame.display.set_mode((scr_wid, scr_hei))
 
-	background = pygame.Surface(screen.get_size())
+	background = pygame.Surface(scr.get_size())
 	background = background.convert()
 	
-	statusbar_height = 30
-	statusbar = pygame.Surface((screen_width, statusbar_height))
-	statusbar = statusbar.convert()
-	statusbar.set_alpha(220)
+	stabar_hei = 30
+	stabar = pygame.Surface((scr_wid, stabar_hei))
+	stabar = stabar.convert()
+	stabar.set_alpha(220)
 
 	FPS = 30
 
@@ -1092,7 +1116,7 @@ try:
 	]
 
 	# hand coordinates
-	hand_y_idle = screen_height - 120
+	hand_y_idle = scr_hei - 120
 	hand_y_sel_offset = -50
 
 	# load card images
@@ -1119,12 +1143,14 @@ try:
 	for fname in ['pique', 'coeur', 'carreau', 'trefle']:
 		suit_images_d[fname] = pygame.image.load(os.path.join(this_folder, r'..\images\cards\{}.png'.format(fname)))
 		suit_images_d[fname].convert_alpha()
-		# suit_images_d[fname] = pygame.transform.smoothscale(suit_images_d[fname], (statusbar_height, statusbar_height))
+		# suit_images_d[fname] = pygame.transform.smoothscale(suit_images_d[fname], (stabar_hei, stabar_hei))
 	suit_images_small_d = {}
 	for fname in ['pique', 'coeur', 'carreau', 'trefle']:
 		suit_images_small_d[fname] = pygame.image.load(os.path.join(this_folder, r'..\images\cards\{}.png'.format(fname)))
 		suit_images_small_d[fname].convert_alpha()
-		suit_images_small_d[fname] = pygame.transform.smoothscale(suit_images_d[fname], (statusbar_height, statusbar_height))
+		suit_images_small_d[fname] = pygame.transform.smoothscale(suit_images_d[fname], (stabar_hei, stabar_hei))
+	small_deck_image = pygame.image.load(os.path.join(this_folder, r'..\images\cards\small_deck.png'))
+	dos_image = pygame.image.load(os.path.join(this_folder, r'..\images\cards\dos.png'))
 	
 	disabled_card_surface = pygame.Surface(card_images_d['Pique']['7'].get_size())
 	disabled_card_surface.fill(GREY_COLOUR)
@@ -1134,39 +1160,51 @@ try:
 	atout_bg = pygame.Surface(suit_images_small_d[fname].get_size())
 	atout_bg.fill(YELLOW_COLOUR)
 	
-	hj_i = 3 # human joueur id
+	hj_i = 0 # human joueur id
 	b_obj = Belote(hj_i)
 	LOG.debug("Start belote thread ...")
 	b_obj.start_all_threads()
 	time.sleep(0.1)
 
 	# surfaces for names of the joueurs
-	joueurs_loc_d = {"human":{},"left":{},"top":{},"right":{},}
+	j_loc_d = {"human":{},"left":{},"top":{},"right":{},}
 	
-	joueurs_loc_d['human']['j_index'] = (hj_i+0)%4
-	joueurs_loc_d['left']['j_index']  = (hj_i+1)%4
-	joueurs_loc_d['top']['j_index']   =	(hj_i+2)%4
-	joueurs_loc_d['right']['j_index'] =	(hj_i+3)%4
+	j_loc_d['human']['j_index'] = (hj_i+0)%4
+	j_loc_d['left' ]['j_index'] = (hj_i+1)%4
+	j_loc_d['top'  ]['j_index'] = (hj_i+2)%4
+	j_loc_d['right']['j_index'] = (hj_i+3)%4
 	
-	joueurs_loc_d[(hj_i+0)%4] = 'human'
-	joueurs_loc_d[(hj_i+1)%4] = 'left'
-	joueurs_loc_d[(hj_i+2)%4] = 'top'
-	joueurs_loc_d[(hj_i+3)%4] = 'right'
+	j_loc_d[(hj_i+0)%4] = 'human'
+	j_loc_d[(hj_i+1)%4] = 'left'
+	j_loc_d[(hj_i+2)%4] = 'top'
+	j_loc_d[(hj_i+3)%4] = 'right'
 
-	joueurs_loc_d['human']['name_surface'] = myfont.render(b_obj.joueurs_l[(hj_i+0)%4].name, True, (0, 0, 0))
-	joueurs_loc_d['left']['name_surface']  = myfont.render(b_obj.joueurs_l[(hj_i+1)%4].name, True, (0, 0, 0))
-	joueurs_loc_d['top']['name_surface']   = myfont.render(b_obj.joueurs_l[(hj_i+2)%4].name, True, (0, 0, 0))
-	joueurs_loc_d['right']['name_surface'] = myfont.render(b_obj.joueurs_l[(hj_i+3)%4].name, True, (0, 0, 0))
+	j_loc_d['human']['name_surface'] = myfont.render(b_obj.joueurs_l[(hj_i+0)%4].name, True, (0, 0, 0))
+	j_loc_d['left' ]['name_surface'] = myfont.render(b_obj.joueurs_l[(hj_i+1)%4].name, True, (0, 0, 0))
+	j_loc_d['top'  ]['name_surface'] = myfont.render(b_obj.joueurs_l[(hj_i+2)%4].name, True, (0, 0, 0))
+	j_loc_d['right']['name_surface'] = myfont.render(b_obj.joueurs_l[(hj_i+3)%4].name, True, (0, 0, 0))
 	
-	joueurs_loc_d['human']['name_coord'] = (int(3*screen_width/4), screen_height-statusbar_height)
-	joueurs_loc_d['left']['name_coord']  = (0                    , int(4*screen_height/9)        )
-	joueurs_loc_d['top']['name_coord']   = (int(screen_width/2)  , 0                             )
-	joueurs_loc_d['right']['name_coord'] = (screen_width - 100   , int(5*screen_height/9)        )
+	j_loc_d['human']['name_coord'] = (int(3*scr_wid/4), scr_hei-stabar_hei )
+	j_loc_d['left' ]['name_coord'] = (0               , int(1*scr_hei/9)   )
+	j_loc_d['top'  ]['name_coord'] = (int(scr_wid/2)  , 0                  )
+	j_loc_d['right']['name_coord'] = (scr_wid - 100   , int(5*scr_hei/9)   )
 	
-	joueurs_loc_d['human']['atout_coord'] = (joueurs_loc_d['human']['name_coord'][0] - statusbar_height , joueurs_loc_d['human']['name_coord'][1]                    )
-	joueurs_loc_d['left']['atout_coord']  = (joueurs_loc_d['left']['name_coord'][0]                     , joueurs_loc_d['left']['name_coord'][1]  + statusbar_height )
-	joueurs_loc_d['top']['atout_coord']   = (joueurs_loc_d['top']['name_coord'][0]   - statusbar_height , joueurs_loc_d['top']['name_coord'][1]                      )
-	joueurs_loc_d['right']['atout_coord'] = (joueurs_loc_d['right']['name_coord'][0]                    , joueurs_loc_d['right']['name_coord'][1] + statusbar_height )
+	j_loc_d['human']['atout_coord'] = (j_loc_d['human']['name_coord'][0] - stabar_hei , j_loc_d['human']['name_coord'][1]              )
+	j_loc_d['left' ]['atout_coord'] = (j_loc_d['left' ]['name_coord'][0]              , j_loc_d['left' ]['name_coord'][1] + stabar_hei )
+	j_loc_d['top'  ]['atout_coord'] = (j_loc_d['top'  ]['name_coord'][0] - stabar_hei , j_loc_d['top'  ]['name_coord'][1]              )
+	j_loc_d['right']['atout_coord'] = (j_loc_d['right']['name_coord'][0]              , j_loc_d['right']['name_coord'][1] + stabar_hei )
+
+	j_loc_d['human']['speech_text'] = None
+	j_loc_d['left' ]['speech_text'] = None
+	j_loc_d['top'  ]['speech_text'] = None
+	j_loc_d['right']['speech_text'] = None
+
+	j_loc_d['human']['speech_coord'] = (j_loc_d['right']['name_coord'][0]                , j_loc_d['human']['name_coord'][1]              )
+	j_loc_d['left' ]['speech_coord'] = (j_loc_d['left' ]['name_coord'][0]                , j_loc_d['left' ]['name_coord'][1] - stabar_hei )
+	j_loc_d['top'  ]['speech_coord'] = (j_loc_d['top'  ]['name_coord'][0] + 4*stabar_hei , j_loc_d['top'  ]['name_coord'][1]              )
+	j_loc_d['right']['speech_coord'] = (j_loc_d['right']['name_coord'][0]                , j_loc_d['right']['name_coord'][1] - stabar_hei )
+	
+	font_18 = pygame.font.Font('freesansbold.ttf', 16)
 	
 	LOG.debug("Start GUI main thread ...")
 	b_playing = True
@@ -1200,8 +1238,7 @@ try:
 			if mouse_pos[1] > hand_y_idle + hand_y_sel_offset: 
 				
 				for hand_i in range(8):
-					
-					
+							
 					if hand_i in human_j.allowed_card_index_l:
 					
 						# if mouse_pos[0] >= get_hand_x(7+1):
@@ -1223,6 +1260,14 @@ try:
 		# the nice green background
 		background.fill(GREEN_COLOUR)		
 		
+		# other players' hands
+		for c_i, c in enumerate(b_obj.joueurs_l[(hj_i+1)%4].hand_l):
+			background.blit(dos_image, (-140+16*c_i, 150+6*c_i))
+		for c_i, c in enumerate(b_obj.joueurs_l[(hj_i+2)%4].hand_l):
+			background.blit(dos_image, (60+16*c_i, -230+6*c_i))
+		for c_i, c in enumerate(b_obj.joueurs_l[(hj_i+3)%4].hand_l):
+			background.blit(dos_image, (770-16*c_i, 50-6*c_i))
+
 		# update table
 		for table_i, table_card in enumerate(b_obj.table_l):
 			
@@ -1244,22 +1289,33 @@ try:
 					background.blit(disabled_card_surface, (hand_x, hand_y))
 		
 		# STATUS BAR
-		statusbar.fill(WHITE_COLOUR)
-		background.blit(statusbar, (0, screen_height - statusbar_height))
+		stabar.fill(WHITE_COLOUR)
+		background.blit(stabar, (0, scr_hei - stabar_hei))
 
 		# display players' names
-		background.blit(joueurs_loc_d['left']['name_surface'] , joueurs_loc_d['left']['name_coord'] )
-		background.blit(joueurs_loc_d['top']['name_surface']  , joueurs_loc_d['top']['name_coord']  )
-		background.blit(joueurs_loc_d['right']['name_surface'], joueurs_loc_d['right']['name_coord'])
-		background.blit(joueurs_loc_d['human']['name_surface'], joueurs_loc_d['human']['name_coord'])
-				
+		background.blit(j_loc_d['left' ]['name_surface'], j_loc_d['left' ]['name_coord'])
+		background.blit(j_loc_d['top'  ]['name_surface'], j_loc_d['top'  ]['name_coord'])
+		background.blit(j_loc_d['right']['name_surface'], j_loc_d['right']['name_coord'])
+		background.blit(j_loc_d['human']['name_surface'], j_loc_d['human']['name_coord'])	
+		
+		if b_obj.deck_l != []:		
+			# dealer icon
+			dealer_str = j_loc_d[b_obj.dealer]
+			background.blit(small_deck_image, j_loc_d[dealer_str]['atout_coord'])
+
 		# atout icon
 		if (b_obj.atout is not None) and (b_obj.preneur is not None):
 			atout_image = suit_images_small_d[b_obj.atout.lower()]
-			pr = joueurs_loc_d[b_obj.preneur]
-			# background.blit(atout_bg, joueurs_loc_d[pr]['atout_coord'])
-			background.blit(atout_image, joueurs_loc_d[pr]['atout_coord'])
+			pr = j_loc_d[b_obj.preneur]
+			# background.blit(atout_bg, j_loc_d[pr]['atout_coord'])
+			background.blit(atout_image, j_loc_d[pr]['atout_coord'])
 		
+		# speech
+		for j_index in range(4):
+			j_key = j_loc_d[j_index]
+			if j_loc_d[j_key]['speech_text'] is not None:
+				background.blit(font_18.render(j_loc_d[j_key]['speech_text'], True, LIGHT_BLUE_COLOUR), j_loc_d[j_key]['speech_coord'])
+			
 		# draw question box if necessary
 		if b_obj.yesno_box is not None: 
 			b_obj.yesno_box.draw(background)
@@ -1273,7 +1329,7 @@ try:
 		# Screen refresh
 		now = time.time()
 		if (now - last_refreshed_time) > (1/FPS):
-			screen.blit(background, (0, 0))
+			scr.blit(background, (0, 0))
 			pygame.display.flip()
 			last_refreshed_time = time.time()
 		else:
